@@ -79,7 +79,5 @@ def run():
     vis.run()
     vis.destroy_window()
   
-
-
 if __name__ == "__main__":
     run()
