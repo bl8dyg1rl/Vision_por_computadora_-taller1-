@@ -1,43 +1,92 @@
-import os
-import pathlib
+import shutil
+import urllib.request
+import zipfile
+from pathlib import Path
+
+import enlighten
+
 import pycolmap
+from pycolmap import logging
+
 import open3d as o3d
 
-image_dir = pathlib.Path('cubo2')
-output_dir = pathlib.Path('colmap_data')
 
-output_dir.mkdir(exist_ok=True)
+def incremental_mapping_with_pbar(database_path, image_path, sfm_path):
+    num_images = pycolmap.Database(database_path).num_images
+    with enlighten.Manager() as manager:
+        with manager.counter(
+            total=num_images, desc="Images registered:"
+        ) as pbar:
+            pbar.update(0, force=True)
+            reconstructions = pycolmap.incremental_mapping(
+                database_path,
+                image_path,
+                sfm_path,
+                initial_image_pair_callback=lambda: pbar.update(2),
+                next_image_callback=lambda: pbar.update(1),
+            )
+    return reconstructions
 
-mvs_path = output_dir / "mvs"
-database_path = output_dir / "database.db"
 
-#Extracción de caracteristicas
-pycolmap.extract_features(database_path, image_dir)
+def run():
+    output_path = Path("colmap_output")
+    image_path = output_path / "C:/Users/prestamour/Desktop/Vision_por_computadora_-taller1--main/Vision_por_computadora_-taller1--main/imagenes/cubo2"
+    database_path = output_path / "database.db"
+    sfm_path = output_path / "sfm"
+    ply_output_path = output_path / "reconstruction.ply"
 
-pycolmap.match_exhaustive(database_path)
+    output_path.mkdir(exist_ok=True)
 
-maps = pycolmap.incremental_mapping(database_path, image_dir, output_dir)
-maps[0].write(output_dir)
+    if database_path.exists():
+        database_path.unlink()
+    pycolmap.set_random_seed(0)
 
-#Reconstrucción densa
-pycolmap.undistort_images(mvs_path, output_dir, image_dir)
-#pycolmap.patch_match_stereo(mvs_path, use_cuda=False)  # Sin CUDA porque no tenga GPU NVIDIA
-pycolmap.stereo_fusion(mvs_path / "dense.ply", mvs_path)
+    #options = pycolmap.SiftExtractionOptions()
+    #options.num_threads = 4
 
-#Obtener la nube de puntos
-ply_path = mvs_path / "dense.ply"
+    pycolmap.extract_features(database_path, image_path, sift_options={"num_threads": 4})
+    pycolmap.match_exhaustive(database_path)
 
-if not ply_path.exists():
-    print('No se encontró el archivo PLY')
-    exit()
+    if sfm_path.exists():
+        shutil.rmtree(sfm_path)
+    sfm_path.mkdir(exist_ok=True)
 
-#Cargar la nube de puntos
-nube_puntos = o3d.io.read_point_cloud(str(ply_path))
+    recs = incremental_mapping_with_pbar(database_path, image_path, sfm_path)
+    # alternatively, use:
+    # import custom_incremental_pipeline
+    # recs = custom_incremental_pipeline.main(
+    #     database_path, image_path, sfm_path
+    # )
+    for idx, rec in recs.items():
+        logging.info(f"#{idx} {rec.summary()}")
 
-#Visualizar la nube de puntos
-o3d.visualization.draw_geometries([nube_puntos])
+    if recs:
+        print(f"Reconstrucción completa. {len(recs)} modelos generados.")
+        for model_id, model in recs.items():
+            print(f"Modelo {model_id}: {len(model.images)} imágenes registradas.")
+            # Guardar el modelo en un archivo PLY
+            model.export_PLY(ply_output_path)
 
-#SIFT
-sift_options = pycolmap.SiftExtractionOptions()
-sift_options.max_num_features = 512
-pycolmap.extract_features(database_path, image_dir, sift_options=sift_options)
+    pcd = o3d.io.read_point_cloud(str(ply_output_path))
+
+    center = pcd.get_center()
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+
+    vis.add_geometry(pcd)
+    vis.get_view_control().set_zoom(0.8)  # Ajusta el zoom inicial
+
+    # Establecer la vista de la cámara en la nube de puntos
+    view_control = vis.get_view_control()
+    view_control.set_front([0, 0, -1])  # Dirección de la vista
+    view_control.set_lookat(center)  # Punto al que mira la cámara
+    view_control.set_up([0, -1, 0])  # Dirección "arriba"
+    view_control.set_zoom(0.8)  # Zoom inicial
+
+    vis.run()
+    vis.destroy_window()
+  
+
+
+if __name__ == "__main__":
+    run()
