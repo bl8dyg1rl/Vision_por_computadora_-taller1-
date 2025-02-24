@@ -30,7 +30,7 @@ def incremental_mapping_with_pbar(database_path, image_path, sfm_path):
 
 def run():
     output_path = Path("colmap_output")
-    image_path = output_path / "C:/Users/prestamour/Desktop/Vision_por_computadora_-taller1--main/Vision_por_computadora_-taller1--main/imagenes/cubo2"
+    image_path = output_path / "C:/Users/POWER/Documents/L.A/Vision(taller1)/Vision_por_computadora_-taller1--main/imagenes/parlante"
     database_path = output_path / "database.db"
     sfm_path = output_path / "sfm"
     ply_output_path = output_path / "reconstruction.ply"
@@ -41,9 +41,6 @@ def run():
         database_path.unlink()
     pycolmap.set_random_seed(0)
 
-    #options = pycolmap.SiftExtractionOptions()
-    #options.num_threads = 4
-
     pycolmap.extract_features(database_path, image_path, sift_options={"num_threads": 4})
     pycolmap.match_exhaustive(database_path)
 
@@ -52,11 +49,7 @@ def run():
     sfm_path.mkdir(exist_ok=True)
 
     recs = incremental_mapping_with_pbar(database_path, image_path, sfm_path)
-    # alternatively, use:
-    # import custom_incremental_pipeline
-    # recs = custom_incremental_pipeline.main(
-    #     database_path, image_path, sfm_path
-    # )
+
     for idx, rec in recs.items():
         logging.info(f"#{idx} {rec.summary()}")
 
