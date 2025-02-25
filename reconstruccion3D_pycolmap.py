@@ -10,6 +10,7 @@ from pycolmap import logging
 
 import open3d as o3d
 
+
 def incremental_mapping_with_pbar(database_path, image_path, sfm_path):
     num_images = pycolmap.Database(database_path).num_images
     with enlighten.Manager() as manager:
@@ -25,6 +26,7 @@ def incremental_mapping_with_pbar(database_path, image_path, sfm_path):
                 next_image_callback=lambda: pbar.update(1),
             )
     return reconstructions
+
 
 def run():
     output_path = Path("colmap_output")
@@ -77,5 +79,7 @@ def run():
     vis.run()
     vis.destroy_window()
   
+
+
 if __name__ == "__main__":
     run()
